@@ -1,0 +1,13 @@
+{
+  "name": "qrcode-ts",
+  "version": "1.0.0",
+  "description": "A port of a qr code generator, done in Javascript. Now in Typescript!",
+  "main": "qrcode.js",
+  "repository": "https://github.com/derrickp/qrcode-ts.git",
+  "author": "Derrick Plotsky <derrickplotsky@gmail.com>",
+  "license": "MIT",
+  "scripts": {},
+  "devDependencies": {
+    "typescript": "^2.7.2"
+  }
+}

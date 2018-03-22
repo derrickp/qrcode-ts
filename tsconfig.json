@@ -1,0 +1,17 @@
+{
+    "compilerOptions": {
+        "module": "es2017",
+        "moduleResolution": "node",
+        "target": "es2017",
+        "noImplicitAny": true,
+        "preserveConstEnums": true,
+        "sourceMap": true,
+        "outDir": "dist"
+    },
+    "include": [
+        "qrcode.ts"
+    ],
+    "exclude": [
+        "node_modules"
+    ]
+}
