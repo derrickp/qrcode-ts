@@ -3,7 +3,15 @@ import { QRBitBuffer } from "./QRBitBuffer";
 import { QRErrorCorrectLevel } from "./QRErrorCorrectLevel";
 import { QRPolynomial } from "./QRPolynomial";
 import { QRRSBlock } from "./QRRSBlock";
-import { getErrorCorrectPolynomial, getLengthInBits } from "./QRUtil";
+import {
+    getBCHTypeInfo,
+    getBCHTypeNumber,
+    getErrorCorrectPolynomial,
+    getLengthInBits,
+    getLostPoint,
+    getMask,
+    getPatternPosition,
+} from "./QRUtil";
 
 export const PAD0 = 0xec;
 export const PAD1 = 0x11;
@@ -94,7 +102,7 @@ export class QRCodeModel {
 
     moduleCount: number = 0;
     dataList: QR8BitByte[] = [];
-    modules: number[][];
+    modules: boolean[][];
     dataCache: number[];
 
     constructor(public typeNumber: number, public errorCorrectLevel: number) {}
@@ -120,9 +128,9 @@ export class QRCodeModel {
         this.makeImpl(false, this.getBestMaskPattern());
     }
 
-    makeImpl(test, maskPattern) {
+    makeImpl(test: boolean, maskPattern: number) {
         this.moduleCount = this.typeNumber * 4 + 17;
-        this.modules = new Array<number[]>(this.moduleCount);
+        this.modules = new Array<boolean[]>(this.moduleCount);
         for (let row = 0; row < this.moduleCount; row++) {
             this.modules[row] = new Array(this.moduleCount);
             for (let col = 0; col < this.moduleCount; col++) {
@@ -144,14 +152,18 @@ export class QRCodeModel {
         this.mapData(this.dataCache, maskPattern);
     }
 
-    setupPositionProbePattern(row, col) {
+    setupPositionProbePattern(row: number, col: number) {
         for (let r = -1; r <= 7; r++) {
-            if (row + r <= -1 || this.moduleCount <= row + r) continue;
+            if (row + r <= -1 || this.moduleCount <= row + r) {
+                continue;
+            }
             for (let c = -1; c <= 7; c++) {
-                if (col + c <= -1 || this.moduleCount <= col + c) continue;
+                if (col + c <= -1 || this.moduleCount <= col + c) {
+                    continue;
+                }
                 if (
-                    (0 <= r && r <= 6 && (c == 0 || c == 6)) ||
-                    (0 <= c && c <= 6 && (r == 0 || r == 6)) ||
+                    (0 <= r && r <= 6 && (c === 0 || c === 6)) ||
+                    (0 <= c && c <= 6 && (r === 0 || r === 6)) ||
                     (2 <= r && r <= 4 && 2 <= c && c <= 4)
                 ) {
                     this.modules[row + r][col + c] = true;
@@ -166,61 +178,40 @@ export class QRCodeModel {
         let pattern = 0;
         for (let i = 0; i < 8; i++) {
             this.makeImpl(true, i);
-            let lostPoint = QRUtil.getLostPoint(this);
-            if (i == 0 || minLostPoint > lostPoint) {
+            const lostPoint = getLostPoint(this);
+            if (i === 0 || minLostPoint > lostPoint) {
                 minLostPoint = lostPoint;
                 pattern = i;
             }
         }
         return pattern;
     }
-    createMovieClip(target_mc, instance_name, depth) {
-        let qr_mc = target_mc.createEmptyMovieClip(instance_name, depth);
-        let cs = 1;
-        this.make();
-        for (let row = 0; row < this.modules.length; row++) {
-            let y = row * cs;
-            for (let col = 0; col < this.modules[row].length; col++) {
-                let x = col * cs;
-                let dark = this.modules[row][col];
-                if (dark) {
-                    qr_mc.beginFill(0, 100);
-                    qr_mc.moveTo(x, y);
-                    qr_mc.lineTo(x + cs, y);
-                    qr_mc.lineTo(x + cs, y + cs);
-                    qr_mc.lineTo(x, y + cs);
-                    qr_mc.endFill();
-                }
-            }
-        }
-        return qr_mc;
-    }
+
     setupTimingPattern() {
         for (let r = 8; r < this.moduleCount - 8; r++) {
-            if (this.modules[r][6] != null) {
+            if (this.modules[r][6]) {
                 continue;
             }
-            this.modules[r][6] = r % 2 == 0;
+            this.modules[r][6] = r % 2 === 0;
         }
         for (let c = 8; c < this.moduleCount - 8; c++) {
-            if (this.modules[6][c] != null) {
+            if (this.modules[6][c]) {
                 continue;
             }
-            this.modules[6][c] = c % 2 == 0;
+            this.modules[6][c] = c % 2 === 0;
         }
     }
+
     setupPositionAdjustPattern() {
-        let pos = QRUtil.getPatternPosition(this.typeNumber);
-        for (let i = 0; i < pos.length; i++) {
-            for (let j = 0; j < pos.length; j++) {
-                let row = pos[i];
-                let col = pos[j];
-                if (this.modules[row][col] != null) {
+        const pos = getPatternPosition(this.typeNumber);
+        for (const row of pos) {
+            for (const col of pos) {
+                if (this.modules[row][col]) {
                     continue;
                 }
                 for (let r = -2; r <= 2; r++) {
                     for (let c = -2; c <= 2; c++) {
-                        if (r == -2 || r == 2 || c == -2 || c == 2 || (r == 0 && c == 0)) {
+                        if (r === -2 || r === 2 || c === -2 || c === 2 || (r === 0 && c === 0)) {
                             this.modules[row + r][col + c] = true;
                         } else {
                             this.modules[row + r][col + c] = false;
@@ -231,22 +222,23 @@ export class QRCodeModel {
         }
     }
 
-    setupTypeNumber(test) {
-        let bits = QRUtil.getBCHTypeNumber(this.typeNumber);
+    setupTypeNumber(test: boolean) {
+        const bits = getBCHTypeNumber(this.typeNumber);
         for (let i = 0; i < 18; i++) {
-            let mod = !test && ((bits >> i) & 1) == 1;
+            const mod = !test && ((bits >> i) & 1) === 1;
             this.modules[Math.floor(i / 3)][i % 3 + this.moduleCount - 8 - 3] = mod;
         }
         for (let i = 0; i < 18; i++) {
-            let mod = !test && ((bits >> i) & 1) == 1;
+            const mod = !test && ((bits >> i) & 1) === 1;
             this.modules[i % 3 + this.moduleCount - 8 - 3][Math.floor(i / 3)] = mod;
         }
     }
-    setupTypeInfo(test, maskPattern) {
-        let data = (this.errorCorrectLevel << 3) | maskPattern;
-        let bits = QRUtil.getBCHTypeInfo(data);
+
+    setupTypeInfo(test: boolean, maskPattern: number) {
+        const data = (this.errorCorrectLevel << 3) | maskPattern;
+        const bits = getBCHTypeInfo(data);
         for (let i = 0; i < 15; i++) {
-            let mod = !test && ((bits >> i) & 1) == 1;
+            const mod = !test && ((bits >> i) & 1) === 1;
             if (i < 6) {
                 this.modules[i][8] = mod;
             } else if (i < 8) {
@@ -256,7 +248,7 @@ export class QRCodeModel {
             }
         }
         for (let i = 0; i < 15; i++) {
-            let mod = !test && ((bits >> i) & 1) == 1;
+            const mod = !test && ((bits >> i) & 1) === 1;
             if (i < 8) {
                 this.modules[8][this.moduleCount - i - 1] = mod;
             } else if (i < 9) {
@@ -267,7 +259,8 @@ export class QRCodeModel {
         }
         this.modules[this.moduleCount - 8][8] = !test;
     }
-    mapData(data, maskPattern) {
+
+    mapData(data: number[], maskPattern: number) {
         let inc = -1;
         let row = this.moduleCount - 1;
         let bitIndex = 7;
@@ -278,18 +271,18 @@ export class QRCodeModel {
             }
             while (true) {
                 for (let c = 0; c < 2; c++) {
-                    if (this.modules[row][col - c] == null) {
+                    if (this.modules[row][col - c]) {
                         let dark = false;
                         if (byteIndex < data.length) {
-                            dark = ((data[byteIndex] >>> bitIndex) & 1) == 1;
+                            dark = ((data[byteIndex] >>> bitIndex) & 1) === 1;
                         }
-                        let mask = QRUtil.getMask(maskPattern, row, col - c);
+                        const mask = getMask(maskPattern, row, col - c);
                         if (mask) {
                             dark = !dark;
                         }
                         this.modules[row][col - c] = dark;
                         bitIndex--;
-                        if (bitIndex == -1) {
+                        if (bitIndex === -1) {
                             byteIndex++;
                             bitIndex = 7;
                         }
